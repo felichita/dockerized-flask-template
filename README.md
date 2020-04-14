@@ -1,4 +1,4 @@
-# hello_world Web serivices
+# hello world flask application == web service
 
 What is it?
 --------------------------------------------
