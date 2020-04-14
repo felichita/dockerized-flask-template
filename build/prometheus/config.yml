@@ -1,0 +1,21 @@
+global:
+  scrape_interval:     3s
+
+  external_labels:
+      monitor: 'flask-app'
+
+rule_files:
+
+scrape_configs:
+  - job_name: 'prometheus'
+
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'example'
+
+    dns_sd_configs:
+      - names: ['app']
+        port: 8080
+        type: A
+        refresh_interval: 5s
