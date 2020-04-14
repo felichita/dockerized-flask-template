@@ -1,0 +1,131 @@
+---
+
+- name: Apply {{ app_name }} deployment
+  k8s:
+    state: present
+    force: yes
+    definition:
+      kind: Deployment
+      apiVersion: apps/v1
+      metadata:
+        labels:
+          k8s-app: "{{ app_name }}"
+        name: "{{ app_name }}"
+        namespace: "{{ kube_namespace }}"
+      spec:
+        replicas: 3
+        revisionHistoryLimit: 10
+        selector:
+          matchLabels:
+            k8s-app: "{{ app_name }}"
+        template:
+          metadata:
+            labels:
+              k8s-app: "{{ app_name }}"
+            annotations:
+              reloader.stakater.com/auto: "true"
+          spec:
+            affinity:
+              nodeAffinity:
+                requiredDuringSchedulingIgnoredDuringExecution:
+                  nodeSelectorTerms:
+                    - matchExpressions:
+                      - key: node-role.kubernetes.io/master
+                        operator: NotIn
+                        values:
+                          - ""
+            containers:
+              - name: "{{ app_name }}"
+                image: "{{ app_image_container }}:{{ app_tag_container }}"
+                resources:
+                  requests:
+                    memory: "256Mi" # random
+                    cpu: "256m" # random
+                  limits:
+                    memory: "512Mi" # random
+                    cpu: "1024m" # random
+                ports:
+                  - containerPort: 8080
+                    protocol: TCP
+                livenessProbe:
+                  httpGet:
+                    scheme: HTTP
+                    path: /health_check
+                    port: 8080
+                  initialDelaySeconds: 30
+                  timeoutSeconds: 5
+                startupProbe:
+                  httpGet:
+                    scheme: HTTP
+                    path: /health_check
+                    port: 8080
+                  failureThreshold: 30
+                  periodSeconds: 10
+                volumeMounts:
+                  - name: internal-certificates
+                    mountPath: /etc/ssl/certs
+                    readOnly: true
+                envFrom:
+                - configMapRef:
+                    name: "{{ app_name }}-configs"
+                imagePullPolicy: Always
+            volumes:
+              - name: internal-certificates
+                hostPath:
+                  path: /usr/local/share/ca-certificates
+                  type: Directory
+            imagePullSecrets:
+              - name: registry
+            serviceAccountName: "{{ kube_namespace }}"
+
+- name: Append Autoscaler to {{ app_name }}
+  k8s:
+    definition:
+      apiVersion: autoscaling/v1
+      kind: HorizontalPodAutoscaler
+      metadata:
+        labels:
+          k8s-app: "{{ app_name }}"
+        name: "{{ app_name }}"
+        namespace: "{{ kube_namespace }}"
+      spec:
+        maxReplicas: 30
+        minReplicas: 3
+        metrics:
+          - type: Resource
+            resource:
+              name: cpu
+              targetAverageUtilization: 50
+          - type: Resource
+            resource:
+              name: memory
+              targetAverageValue: 384Mi
+        scaleTargetRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: "{{ app_name }}"
+
+- name: Hack Patch for force pull image
+  shell: >
+    kubectl patch statefulset -n {{kube_namespace}} {{app_name}} -p
+    "{\"spec\":{\"template\":{\"metadata\":{\"labels\":{\"date\":\"{{ ansible_date_time.epoch }}\"}}}}}"
+
+#- name: Apply octavia Ingress for {{ app_name }}
+#  k8s:
+#    definition:
+#      apiVersion: networking.k8s.io/v1beta1
+#      kind: Ingress
+#      metadata:
+#        name: "{{ app_name }}"
+#        namespace: "{{ kube_namespace }}"
+#        annotations:
+#          kubernetes.io/ingress.class: "openstack"
+#          octavia.ingress.kubernetes.io/internal: "true"
+#      spec:
+#        rules:
+#        - http:
+#            paths:
+#            - path: /
+#              backend:
+#                serviceName: "{{ app_name }}"
+#                servicePort: 8080

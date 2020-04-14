@@ -1,0 +1,7 @@
+---
+# defaults file for common-k8s
+
+kube_namespace: "{{ kube_namespace }}"
+docker_registry_username: 'registry'
+docker_registry_password: secret
+docker_registry: "secret"

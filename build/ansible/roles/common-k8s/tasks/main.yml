@@ -1,0 +1,47 @@
+---
+
+- name: Log into docker-registry
+  docker_login:
+    registry: "{{ docker_registry }}"
+    username: "{{ docker_registry_username }}"
+    password: "{{ docker_registry_password }}"
+    debug: true
+    tls: yes
+    reauthorize: yes
+
+- name: register docker-config
+  shell: cat /root/.docker/config.json
+  register: docker_content
+
+- name: Set fact docker_config
+  set_fact:
+    docker_config: "{{ docker_content.stdout | b64encode }}"
+
+- name: apply a {{ kube_namespace }} namespace
+  k8s:
+    definition:
+      kind: Namespace
+      metadata:
+        name: "{{ kube_namespace }}"
+
+- name: apply {{ kube_namespace }} service account
+  k8s:
+    definition:
+      kind: ServiceAccount
+      metadata:
+        name: "{{ kube_namespace }}"
+        namespace: "{{ kube_namespace }}"
+        labels:
+          k8s-app: "{{ kube_namespace }}"
+
+- name: apply {{ kube_namespace }} a secret registry
+  k8s:
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: registry
+        namespace: "{{ kube_namespace }}"
+      data:
+        .dockerconfigjson: "{{ docker_config }}"
+      type: kubernetes.io/dockerconfigjson

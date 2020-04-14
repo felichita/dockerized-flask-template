@@ -1,0 +1,11 @@
+---
+
+- hosts: 'k8s-primary'
+  become: yes
+  vars_files:
+  - vars/default.yml
+
+  roles:
+    - { role: common-k8s, tags: ['common-k8s'] }
+    - { role: flask-k8s, app_image_container: "{{ docker_registry }}/docker/flask", app_tag_container: "latest", tags: ['app']}
+
