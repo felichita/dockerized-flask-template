@@ -8,6 +8,11 @@ services:
     env_file:
       - .env
     stop_signal: SIGKILL
+    healthcheck:
+      test: curl --fail -s http://localhost:8080/health_check || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 3
     ports:
       - 8080:8080
 
